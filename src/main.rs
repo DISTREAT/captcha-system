@@ -151,7 +151,9 @@ async fn request(form: web::Form<RequestCaptcha>) -> impl Responder {
     let captcha = draw_captcha(code).await;
 
     match captcha {
-        Ok(captcha_image) => HttpResponse::Ok().body(captcha_image.to_vec()),
+        Ok(captcha_image) => HttpResponse::Ok()
+            .insert_header(("Content-Type", format!("image/{}", CONFIG.captcha.format)))
+            .body(captcha_image.to_vec()),
         Err(_) => HttpResponse::InternalServerError().into(),
     }
 }
