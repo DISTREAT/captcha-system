@@ -169,7 +169,7 @@ async fn verify(form: web::Form<VerifyCaptcha>) -> impl Responder {
         return HttpResponse::BadRequest().into();
     }
 
-    for index in (-1..0).rev() {
+    for index in (-1..1).rev() {
         if generate_digest(index, &form.salt).await.to_hex()[0..form.code.len()] == form.code {
             return HttpResponse::Ok()
                 .insert_header(("Content-Type", "application/json"))
