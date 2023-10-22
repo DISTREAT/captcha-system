@@ -3,6 +3,7 @@ use actix_web::middleware::Logger;
 use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
 use config_file::FromConfigFile;
 use env_logger::Env;
+use log::error;
 use lazy_static::lazy_static;
 use magick_rust::{bindings, magick_wand_genesis, DrawingWand, MagickWand, PixelWand};
 use rand::Rng;
@@ -154,7 +155,10 @@ async fn request(form: web::Form<RequestCaptcha>) -> impl Responder {
         Ok(captcha_image) => HttpResponse::Ok()
             .insert_header(("Content-Type", format!("image/{}", CONFIG.captcha.format)))
             .body(captcha_image.to_vec()),
-        Err(_) => HttpResponse::InternalServerError().into(),
+        Err(_) => {
+            error!("{:?}", captcha);
+            HttpResponse::InternalServerError().into()
+        },
     }
 }
 
