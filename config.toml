@@ -1,0 +1,23 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+governor_per_second = 2
+governor_burst_size = 10
+
+[captcha]
+secret = ",{^['6(+._0%@%6&!@=;8%9#[^!7-05$"  # change immediately
+code_length = 4
+expire_eta = 45.0
+format = "webp"
+width = 200
+height = 85
+background_color = "#ffffff"
+text_color = "#000000"
+font = "Helvetica"
+font_size = 32.0
+padding_x = 20
+padding_y = 30
+character_spacing = 25
+rotation_limit = [-50, 50]
+swirl = -43
+noise = 1.9
