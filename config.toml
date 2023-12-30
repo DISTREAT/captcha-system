@@ -7,7 +7,7 @@ governor_burst_size = 10
 [captcha]
 secret = ",{^['6(+._0%@%6&!@=;8%9#[^!7-05$"  # change immediately
 code_length = 4
-expire_eta = 45.0
+expire_eta = 45
 format = "webp"
 width = 200
 height = 85

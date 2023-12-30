@@ -3,13 +3,13 @@ use actix_web::middleware::Logger;
 use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
 use config_file::FromConfigFile;
 use env_logger::Env;
-use log::error;
 use lazy_static::lazy_static;
+use log::error;
 use magick_rust::{bindings, magick_wand_genesis, DrawingWand, MagickWand, PixelWand};
 use rand::Rng;
+use rotkeappchen::Rotkeappchen;
 use serde::Deserialize;
 use std::cmp;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 lazy_static! {
     static ref CONFIG: Config =
@@ -31,7 +31,7 @@ struct ConfigServer {
 struct ConfigCaptcha {
     secret: String,
     code_length: usize,
-    expire_eta: f64,
+    expire_eta: usize,
     format: String,
     width: usize,
     height: usize,
@@ -51,24 +51,6 @@ struct ConfigCaptcha {
 struct Config {
     server: ConfigServer,
     captcha: ConfigCaptcha,
-}
-
-async fn generate_digest(offset: isize, salt: &String) -> blake3::Hash {
-    let mut hasher = blake3::Hasher::new();
-    let unix_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("cannot retrieve system time")
-        .as_secs() as f64;
-
-    hasher.update(salt.as_bytes());
-    hasher.update(CONFIG.captcha.secret.as_bytes());
-    hasher.update(
-        &((unix_time / CONFIG.captcha.expire_eta) + (offset as f64))
-            .floor()
-            .to_be_bytes(),
-    );
-
-    hasher.finalize()
 }
 
 async fn draw_captcha(code: &str) -> anyhow::Result<Vec<u8>> {
@@ -144,12 +126,14 @@ struct RequestCaptcha {
 
 #[post("/request")]
 async fn request(form: web::Form<RequestCaptcha>) -> impl Responder {
-    if form.salt.len() == 0 {
+    if form.salt.is_empty() {
         return HttpResponse::BadRequest().into();
     }
 
-    let code = &generate_digest(0, &form.salt).await.to_hex()[0..CONFIG.captcha.code_length];
-    let captcha = draw_captcha(code).await;
+    let rot = Rotkeappchen::default(CONFIG.captcha.secret.as_bytes(), CONFIG.captcha.expire_eta);
+    let digest = rot.digest(&form.salt);
+    let hex = hexhex::hex(&digest).to_string();
+    let captcha = draw_captcha(&hex[0..CONFIG.captcha.code_length]).await;
 
     match captcha {
         Ok(captcha_image) => HttpResponse::Ok()
@@ -158,7 +142,7 @@ async fn request(form: web::Form<RequestCaptcha>) -> impl Responder {
         Err(_) => {
             error!("{:?}", captcha);
             HttpResponse::InternalServerError().into()
-        },
+        }
     }
 }
 
@@ -170,13 +154,15 @@ struct VerifyCaptcha {
 
 #[post("/verify")]
 async fn verify(form: web::Form<VerifyCaptcha>) -> impl Responder {
-    if form.salt.len() == 0 || form.code.len() == 0 || form.code.len() > CONFIG.captcha.code_length
+    if form.salt.is_empty() || form.code.is_empty() || form.code.len() > CONFIG.captcha.code_length
     {
         return HttpResponse::BadRequest().into();
     }
 
-    for index in (-1..1).rev() {
-        if generate_digest(index, &form.salt).await.to_hex()[0..form.code.len()] == form.code {
+    let rot = Rotkeappchen::default(CONFIG.captcha.secret.as_bytes(), CONFIG.captcha.expire_eta);
+
+    if let Ok(code) = hexhex::decode(&form.code) {
+        if rot.is_valid(&form.salt, |digest| digest[0..code.len()] == code) {
             return HttpResponse::Ok()
                 .insert_header(("Content-Type", "application/json"))
                 .body("{\"valid\": true}");
